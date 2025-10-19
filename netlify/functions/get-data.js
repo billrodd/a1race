@@ -1,4 +1,4 @@
-// netlify/functions/get-data.js
+// get-data.js
 import { getStore } from '@netlify/blobs';
 
 export const handler = async (event) => {
