@@ -1,0 +1,13 @@
+{
+  "name": "Race to A Million",
+  "short_name": "Race",
+  "start_url": "/race",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#f4f4f9",
+  "theme_color": "#1f8f3d",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
