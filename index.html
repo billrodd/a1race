@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <meta name="theme-color" content="#1f8f3d"/>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <title>Race to A Million</title>
+  <style>
+    :root{ --lane-h:70px; --lane-gap:20px; }
+
+    body{ font-family:Arial, sans-serif; margin:0; padding:20px; background:#f4f4f9; color:#222; }
+    h1{ text-align:center; margin:0 0 10px; color:#333; }
+
+    /* Rotate cue for phones (cannot force orientation without PWA/user action) */
+    .rotate-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.85); color:#fff; display:none; align-items:center; justify-content:center; z-index:3000; text-align:center; font-size:1.1rem; padding:20px; }
+    .rotate-card{ padding:20px 24px; border-radius:16px; background:rgba(255,255,255,.08); }
+    .rotate-card .emoji{ font-size:2rem; margin-bottom:6px; }
+    @media (orientation:portrait){ .rotate-overlay{ display:flex; } }
+
+    /* Admin */
+    #admin-data-entry{ display:block; margin:20px auto; padding:20px; background:#e9e9e9; border-radius:14px; max-width:1000px; box-shadow:0 6px 18px rgba(0,0,0,.08); text-align:center; }
+    #admin-data-entry h2{ margin:6px 0 6px; }
+    #sales-data-table{ width:100%; border-collapse:collapse; margin:12px 0; background:#fff; border-radius:10px; overflow:hidden; }
+    #sales-data-table th,#sales-data-table td{ border:1px solid #ddd; padding:8px; text-align:center; }
+    #sales-data-table th{ background:#f7f7f7; }
+    #admin-data-entry input[type="number"]{ width:10ch; height:28px; box-sizing:border-box; text-align:center; font-size:1em; -webkit-appearance:none; -moz-appearance:textfield; margin:0; border:1px solid #bbb; border-radius:6px; }
+
+    .tech-controls{ display:flex; gap:10px; justify-content:center; align-items:center; flex-wrap:wrap; margin:12px 0 6px; }
+    #new-tech-name{ padding:10px 12px; font-size:1rem; min-width:260px; border:1px solid #bbb; border-radius:8px; outline:none; background:#fff; }
+    .btn{ padding:10px 14px; font-size:1rem; font-weight:700; color:#fff; border:none; border-radius:8px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,.1); }
+    .btn-add{ background:#28a745; }
+    .btn-save{ background:#007bff; }
+    .btn-race{ background:#28a745; }
+    .btn-ghost{ background:#6c757d; }
+    .btn-remove{ background:#dc3545; padding:6px 10px; font-size:.9rem; border-radius:6px; }
+    .row-actions{ display:flex; justify-content:center; align-items:center; }
+    #save-status{ margin-top:6px; font-weight:700; color:#007bff; }
+
+    /* Race controls */
+    #start-race-button{ width:100%; padding:15px 30px; font-size:1.3em; font-weight:bold; background:#dc3545; color:#fff; border:3px solid #b00020; border-radius:8px; cursor:pointer; margin:0 0 14px; transition:background-color 3s ease-in-out, transform .08s; }
+    #start-race-button:active{ transform:scale(.98); }
+    .solid-green{ background:#28a745 !important; border-color:#1e7e34 !important; }
+    #month-indicator{ text-align:center; font-weight:bold; font-size:1.2rem; height:28px; line-height:28px; opacity:0; transition:opacity .35s ease; margin-bottom:8px; }
+    .active-month{ opacity:1 !important; color:#007bff; }
+
+    /* FX */
+    #confetti-shower{ position:fixed; inset:0; pointer-events:none; overflow:hidden; z-index:1000; display:none; }
+    .confetti-piece{ position:absolute; width:10px; height:20px; background:#f00; opacity:0; animation:confetti-fall 3s ease-in forwards; }
+    @keyframes confetti-fall{ 0%{ transform:translateY(-100vh) rotate(0); opacity:1; } 100%{ transform:translateY(100vh) rotate(720deg); opacity:0; } }
+    @keyframes confetti-pop{ 0%{opacity:1; transform:translate(0,0) rotate(0);} 60%{opacity:1; transform:translate(var(--dx),var(--dy)) rotate(540deg);} 100%{opacity:0; transform:translate(calc(var(--dx)),calc(var(--dy) + 160px)) rotate(720deg);} }
+    .smoke-puff{ position:absolute; top:-20px; right:0; width:150px; height:150px; background:radial-gradient(circle, rgba(128,128,128,.7) 10%, transparent 70%); border-radius:50%; z-index:50; transform:scale(0); transition:transform 1s ease-out, opacity 1s ease-out; opacity:0; display:none; }
+
+    /* Track */
+    .race-track-container{ position:relative; width:95%; max-width:1200px; margin:20px auto; padding-bottom:30px; display:none; }
+    .track-lanes{ position:relative; width:100%; }
+    .finish-line{ position:absolute; right:0; top:0; height:100%; width:15px; background:repeating-linear-gradient(45deg,#333,#333 5px,#fff,#fff 10px); z-index:2; border-bottom-left-radius:6px; border-top-left-radius:6px; }
+    .mile-marker-line{ position:absolute; top:0; width:2px; height:100%; background:#000; opacity:.35; z-index:1; }
+    .mile-badge{ position:absolute; top:-22px; transform:translateX(-50%); width:18px; height:18px; display:flex; align-items:center; justify-content:center; background:#28a745; color:#fff; font-weight:900; font-size:12px; border:2px solid #1e7e34; border-radius:3px; box-shadow:0 2px 4px rgba(0,0,0,.2); z-index:3; }
+    .racer{ position:relative; height:var(--lane-h); margin-bottom:var(--lane-gap); background:#ddd; border-radius:6px; display:flex; align-items:center; }
+    .racer:last-child{ margin-bottom:0; }
+    .van-name{ position:absolute; left:10px; font-weight:bold; color:#333; z-index:3; }
+    .sales-counter{ position:absolute; left:-120px; width:100px; text-align:right; font-size:1.1em; font-weight:800; color:#007bff; z-index:3; }
+
+    .van{ position:absolute; left:0; width:100px; transition:left 1.1s cubic-bezier(.34,.13,.42,1.35); animation:rocking .8s infinite alternate; transform-origin:80% 70%; transform:scaleX(-1); z-index:5; }
+    .van img{ width:100%; height:auto; }
+    @keyframes rocking{ 0%{ transform:translateY(0) rotate(0); } 50%{ transform:translateY(2px) rotate(2deg); } 100%{ transform:translateY(0) rotate(-1deg); } }
+    .van.champion{ animation:champ-bounce 1.2s ease-in-out infinite; filter:drop-shadow(0 0 10px gold) drop-shadow(0 0 20px rgba(255,215,0,.6)); transform:scaleX(1); }
+    @keyframes champ-bounce{ 0%{ transform:translateY(0) scaleX(1); } 50%{ transform:translateY(-6px) scaleX(1); } 100%{ transform:translateY(0) scaleX(1); } }
+    .van .flag{ position:absolute; right:85px; top:-14px; background:gold; color:#222; font-weight:900; padding:4px 6px; border-radius:6px; border:2px solid #c9a200; transform:rotate(-10deg); box-shadow:0 2px 6px rgba(0,0,0,.25); font-size:.85rem; white-space:nowrap; z-index:6; display:none; }
+    .van.champion .flag{ display:block; }
+
+    .race-view-container{ display:none; }
+  </style>
+</head>
+<body>
+  <h1>Race to A Million</h1>
+
+  <!-- Portrait rotate cue -->
+  <div class="rotate-overlay" id="rotate-overlay">
+    <div class="rotate-card"><div class="emoji">🔄</div><div>Rotate your device to landscape</div></div>
+  </div>
+
+  <!-- ADMIN -->
+  <div id="admin-data-entry">
+    <h2>Admin: Monthly Sales Data Entry (Monthly Growth)</h2>
+    <p>Enter the <strong>monthly sales total</strong> for each month. Data autosaves to the cloud.</p>
+
+    <div class="tech-controls">
+      <input id="new-tech-name" type="text" placeholder="Add technician name (e.g., Brooke)"/>
+      <button class="btn btn-add" id="add-tech-btn">Add Technician</button>
+      <button class="btn btn-save" id="save-btn">Save Data</button>
+      <button class="btn btn-ghost" id="token-btn" title="One-time setup on admin device">Set Admin Token</button>
+      <button class="btn btn-race" id="race-btn">Let's Race</button>
+    </div>
+
+    <table id="sales-data-table">
+      <thead>
+        <tr>
+          <th style="width:160px;">Tech</th>
+          <th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th>
+          <th>May</th><th>Jun</th><th>Jul</th><th>Aug</th>
+          <th>Sep</th><th>Oct</th><th>Nov</th><th>Dec</th>
+          <th style="width:90px;">Remove</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <p id="save-status">Data ready.</p>
+  </div>
+
+  <!-- RACE VIEW -->
+  <div class="race-view-container">
+    <div id="month-indicator">Start... Your ... Engines...</div>
+    <div id="race-controls"><button id="start-race-button">Start... Your ... Engines...</button></div>
+    <div id="confetti-shower"></div>
+  </div>
+
+  <div class="race-track-container">
+    <div class="track-lanes" id="track-lanes"><!-- built dynamically --></div>
+  </div>
+
+  <script>
+    /* ---------- Polyfills & utils ---------- */
+    (function(){
+      if (!window.CSS) window.CSS = {};
+      if (typeof window.CSS.escape !== 'function') {
+        window.CSS.escape = function(value){
+          return String(value).replace(/[^a-zA-Z0-9_-]/g, s => '\\' + s);
+        };
+      }
+    })();
+
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const DATA_KEY  = 'raceToAMillionSalesData';
+    const TECHS_KEY = 'raceToAMillionTechList';
+
+    const GOAL = 1_000_000;
+    const TRACK_WIDTH = 1200, VAN_WIDTH_PX = 100;
+    const MOVE_DURATION = 1100, PAUSE_BETWEEN_TECHS = 250, PAUSE_BETWEEN_MONTHS = 1500;
+    const MAX_TRAVEL = TRACK_WIDTH - VAN_WIDTH_PX;       // 1100
+    const CHAMPION_LEFT = MAX_TRAVEL + (VAN_WIDTH_PX/2); // 1150
+
+    /* ====== Cloud endpoints (Netlify Functions) ====== */
+    const GET_URL  = '/.netlify/functions/get-data';
+    const SAVE_URL = '/.netlify/functions/save-data';
+    const getAdminToken = () => localStorage.getItem('ADMIN_TOKEN') || '';
+
+    /* ---------- Sounds ---------- */
+    const startSound    = new Audio('START.mp3');
+    const readyGoSound  = new Audio('ONYOURMARKS.wav');
+    const vroomAudio    = new Audio('vroom.wav');  // restarts each month
+    vroomAudio.loop = true; vroomAudio.preload='auto'; vroomAudio.volume=.55;
+    const vroom2Audio   = new Audio('vroom2.wav'); // continuous from first movement
+    vroom2Audio.loop = true; vroom2Audio.preload='auto'; vroom2Audio.volume=.35;
+    const chaChingAudio = new Audio('cha-ching.wav');
+    const safePlay = (audio)=>{ try{ audio.cloneNode(true).play().catch(()=>{});}catch(e){} };
+    const ensureVroomPlaying=()=>{ try{ if(vroomAudio.paused) vroomAudio.play().catch(()=>{});}catch(e){} };
+    const restartVroom =()=>{ try{ vroomAudio.currentTime=0; ensureVroomPlaying(); }catch(e){} };
+    const stopVroom    =()=>{ try{ vroomAudio.pause(); vroomAudio.currentTime=0; }catch(e){} };
+    const startVroom2  =()=>{ try{ if(vroom2Audio.paused){ vroom2Audio.currentTime=0; vroom2Audio.play().catch(()=>{});} }catch(e){} };
+    const stopVroom2   =()=>{ try{ vroom2Audio.pause(); vroom2Audio.currentTime=0; }catch(e){} };
+    const playChaChing =()=> safePlay(chaChingAudio);
+
+    /* ---------- DOM handles ---------- */
+    const monthIndicatorElement = document.getElementById('month-indicator');
+    const startButton           = document.getElementById('start-race-button');
+    const delay = ms => new Promise(r=>setTimeout(r,ms));
+    const formatCurrency = n => '$' + Math.floor(n).toLocaleString('en-US');
+    const slug = name => name.trim().replace(/\s+/g,'-').replace(/[^A-Za-z0-9_-]/g,'');
+    const idFor = (p,name) => `${p}-${slug(name)}`;
+
+    let TECH_NAMES = ['Austin','Adam','Tim','Kaleb'];
+    let MONTHLY_SALES_DATA = {};
+    let CUMULATIVE_SALES_TOTAL = {};
+    let IS_FINISHED = {};
+
+    /* ---------- Cloud I/O ---------- */
+    async function fetchCloudData(){
+      try{
+        const res = await fetch(GET_URL, { cache: 'no-store' });
+        if(!res.ok) throw new Error('cloud get failed');
+        const data = await res.json();
+        if(Array.isArray(data.techs) && data.sales && typeof data.sales==='object'){
+          TECH_NAMES = data.techs;
+          MONTHLY_SALES_DATA = data.sales;
+          // keep local copies for offline usage
+          localStorage.setItem(TECHS_KEY, JSON.stringify(TECH_NAMES));
+          localStorage.setItem(DATA_KEY,  JSON.stringify(MONTHLY_SALES_DATA));
+        }
+      }catch(e){
+        // fallback to local (already loaded below)
+        console.warn('Using local data (cloud fetch issue):', e?.message || e);
+      }
+    }
+
+    let cloudSaveTimer = null;
+    function queueCloudSave(){
+      clearTimeout(cloudSaveTimer);
+      cloudSaveTimer = setTimeout(saveCloudData, 500);
+    }
+    async function saveCloudData(){
+      try{
+        const payload = { techs: TECH_NAMES, sales: MONTHLY_SALES_DATA };
+        await fetch(SAVE_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-admin-token': getAdminToken()
+          },
+          body: JSON.stringify(payload)
+        });
+      }catch(e){
+        console.warn('Cloud save failed (will remain in localStorage):', e?.message || e);
+      }
+    }
+
+    /* ---------- Tech list & data (local) ---------- */
+    function loadTechList(){
+      try{
+        const saved = JSON.parse(localStorage.getItem(TECHS_KEY) || '[]');
+        if(Array.isArray(saved) && saved.length) TECH_NAMES = saved;
+        else{
+          const parsed = JSON.parse(localStorage.getItem(DATA_KEY) || '{}');
+          const keys   = parsed && typeof parsed==='object' ? Object.keys(parsed) : [];
+          TECH_NAMES = keys.length ? keys : TECH_NAMES;
+        }
+      }catch(e){}
+    }
+    function saveTechList(){ localStorage.setItem(TECHS_KEY, JSON.stringify(TECH_NAMES)); queueCloudSave(); }
+
+    function loadSavedData(){
+      TECH_NAMES.forEach(n => { MONTHLY_SALES_DATA[n] = Array(12).fill(0); });
+      try{
+        const parsed = JSON.parse(localStorage.getItem(DATA_KEY) || '{}');
+        if(parsed && typeof parsed==='object') MONTHLY_SALES_DATA = { ...MONTHLY_SALES_DATA, ...parsed };
+      }catch(e){}
+      Object.keys(MONTHLY_SALES_DATA).forEach(n => { if(!TECH_NAMES.includes(n)) delete MONTHLY_SALES_DATA[n]; });
+      TECH_NAMES.forEach(n => { if(!Array.isArray(MONTHLY_SALES_DATA[n])) MONTHLY_SALES_DATA[n] = Array(12).fill(0); });
+    }
+    function saveData(show=false){
+      retrieveDataFromTable();
+      localStorage.setItem(DATA_KEY, JSON.stringify(MONTHLY_SALES_DATA));
+      queueCloudSave();
+      if(show){
+        const s=document.getElementById('save-status');
+        if(s){ s.innerText='Saved to cloud!'; s.style.color='#28a745'; setTimeout(()=>{ s.innerText='Data ready.'; s.style.color='#007bff'; },1800); }
+      }
+    }
+
+    /* ---------- Admin table ---------- */
+    function populateDataTable(){
+      const tbody = document.querySelector('#sales-data-table tbody');
+      tbody.innerHTML = '';
+      TECH_NAMES.forEach(name=>{
+        const tr=document.createElement('tr');
+
+        const tdName=document.createElement('td'); tdName.textContent=name; tr.appendChild(tdName);
+
+        for(let i=0;i<12;i++){
+          const td=document.createElement('td');
+          const input=document.createElement('input');
+          input.type='number'; input.min='0';
+          input.setAttribute('data-tech',name);
+          input.setAttribute('data-month-index',String(i));
+          input.value = MONTHLY_SALES_DATA[name]?.[i] ?? 0;
+          input.addEventListener('input',()=>saveData(false));
+          td.appendChild(input);
+          tr.appendChild(td);
+        }
+
+        const tdActions=document.createElement('td'); tdActions.className='row-actions';
+        const btn=document.createElement('button'); btn.className='btn-remove'; btn.textContent='✖'; btn.title=`Remove ${name}`;
+        btn.addEventListener('click',()=>removeTechnician(name));
+        tdActions.appendChild(btn); tr.appendChild(tdActions);
+
+        tbody.appendChild(tr);
+      });
+    }
+    function retrieveDataFromTable(){
+      TECH_NAMES.forEach(name=>{
+        MONTHLY_SALES_DATA[name] = [];
+        for(let i=0;i<MONTHS.length;i++){
+          const sel = `#sales-data-table input[data-tech="${CSS.escape(name)}"][data-month-index="${i}"]`;
+          const el = document.querySelector(sel);
+          const val = parseInt(el?.value ?? '0') || 0;
+          MONTHLY_SALES_DATA[name].push(val);
+        }
+      });
+    }
+
+    function normalizeName(s){ return s.trim().replace(/\s+/g,' ').replace(/[^\w\s-]/g,'').replace(/\b\w/g,c=>c.toUpperCase()); }
+    function addTechnician(name){
+      const clean=normalizeName(name);
+      if(!clean){ alert('Please enter a name.'); return; }
+      if(TECH_NAMES.includes(clean)){ alert('That technician already exists.'); return; }
+      TECH_NAMES.push(clean);
+      MONTHLY_SALES_DATA[clean]=Array(12).fill(0);
+      saveTechList(); saveData(false); populateDataTable();
+      const input=document.getElementById('new-tech-name'); if(input) input.value='';
+    }
+    function removeTechnician(name){
+      if(!TECH_NAMES.includes(name)) return;
+      if(!confirm(`Remove ${name}? Their saved monthly data will be deleted.`)) return;
+      TECH_NAMES = TECH_NAMES.filter(n=>n!==name);
+      delete MONTHLY_SALES_DATA[name];
+      saveTechList(); saveData(false); populateDataTable();
+    }
+
+    /* ---------- Track build ---------- */
+    function buildTrack(){
+      const track=document.getElementById('track-lanes');
+      track.innerHTML='';
+
+      // Lanes
+      TECH_NAMES.forEach(name=>{
+        const racer=document.createElement('div'); racer.className='racer'; racer.id=`racer-${slug(name)}`;
+
+        const counter=document.createElement('span'); counter.className='sales-counter'; counter.id=idFor('counter',name); counter.textContent='$0';
+        const label=document.createElement('span'); label.className='van-name'; label.textContent=name;
+
+        const van=document.createElement('div'); van.className='van'; van.id=idFor('van',name);
+        const flag=document.createElement('span'); flag.className='flag'; flag.textContent='$1 MILL!!';
+        const img=document.createElement('img'); img.src='A1-Truck-convert.io_.webp'; img.alt='A1 Garage Doors Van';
+        const smoke=document.createElement('div'); smoke.className='smoke-puff';
+
+        van.appendChild(flag); van.appendChild(img); van.appendChild(smoke);
+
+        racer.appendChild(counter); racer.appendChild(label); racer.appendChild(van);
+        track.appendChild(racer);
+      });
+
+      // $100k mile markers
+      const MAX_TRAVEL_LOCAL = 1200 - 100;
+      for(let i=1;i<=9;i++){
+        const px = i*(MAX_TRAVEL_LOCAL/10);
+        const line = document.createElement('div'); line.className='mile-marker-line'; line.style.left = `${px}px`;
+        const badge= document.createElement('div'); badge.className='mile-badge'; badge.style.left = `${px}px`; badge.textContent = String(i);
+        track.appendChild(line); track.appendChild(badge);
+      }
+      const finish=document.createElement('div'); finish.className='finish-line'; track.appendChild(finish);
+    }
+
+    /* ---------- Race logic ---------- */
+    const CONFETTI_COLORS=['#ff0','#f00','#5252f5','#0f0','#f0f','#0ff'];
+    function launchConfetti(vanEl, shots=3, interval=220, piecesPerShot=(window.innerWidth<640?20:40)){
+      const layer=document.getElementById('confetti-shower');
+      layer.style.display='block';
+      let fired=0;
+
+      const fire=()=>{
+        const rect=vanEl.getBoundingClientRect();
+        const originX=rect.left+rect.width/2;
+        const originY=rect.top+rect.height/2;
+        for(let i=0;i<piecesPerShot;i++){
+          const piece=document.createElement('div');
+          piece.className='confetti-piece';
+          piece.style.backgroundColor=CONFETTI_COLORS[Math.floor(Math.random()*CONFETTI_COLORS.length)];
+          const spread=Math.min(60, rect.width);
+          piece.style.left=`${originX + (Math.random()-0.5)*spread}px`;
+          piece.style.top =`${originY + (Math.random()-0.5)*spread}px`;
+          piece.style.setProperty('--dx', `${(Math.random()*2-1)*140}px`);
+          piece.style.setProperty('--dy', `${(-80 - Math.random()*140)}px`);
+          piece.style.animationName='confetti-pop';
+          piece.style.animationDuration=`${1.8 + Math.random()*0.9}s`;
+          piece.style.animationDelay=`${Math.random()*0.15}s`;
+          layer.appendChild(piece);
+        }
+        fired++; if(fired>=shots){ setTimeout(()=>{ layer.style.display='none'; layer.innerHTML=''; },2600); }
+      };
+
+      playChaChing();
+      fire();
+      const t=setInterval(()=>{ if(fired>=shots){ clearInterval(t); return; } fire(); }, interval);
+    }
+
+    function animateCounter(name, start, end, duration){
+      const el=document.getElementById(idFor('counter',name)); if(!el) return;
+      const t0=performance.now(); let id;
+      const step=(ts)=>{
+        const p=Math.min(1,(ts-t0)/duration);
+        el.innerText=formatCurrency(start+(end-start)*p);
+        if(p<1){ id=requestAnimationFrame(step);} else cancelAnimationFrame(id);
+      };
+      id=requestAnimationFrame(step);
+    }
+
+    function techOrderForMonth(monthIndex, list){
+      return [...list].sort((a,b)=>( (MONTHLY_SALES_DATA[a]?.[monthIndex]||0) - (MONTHLY_SALES_DATA[b]?.[monthIndex]||0) ));
+    }
+
+    function raceVan(name, prev, next){
+      const van=document.getElementById(idFor('van',name));
+      const flag=van?.querySelector('.flag');
+      if(!van) return;
+
+      if(IS_FINISHED[name]){
+        CUMULATIVE_SALES_TOTAL[name]=next;
+        animateCounter(name, prev, next, MOVE_DURATION);
+        return;
+      }
+
+      CUMULATIVE_SALES_TOTAL[name]=next;
+      animateCounter(name, prev, next, MOVE_DURATION);
+
+      const newPos=Math.min(1, next/GOAL)*MAX_TRAVEL;
+
+      if(next>=GOAL){
+        IS_FINISHED[name]=true;
+        van.style.left=CHAMPION_LEFT+'px';
+        setTimeout(()=>{
+          launchConfetti(van,3,220);
+          const puff=van.querySelector('.smoke-puff');
+          if(puff){ puff.style.display='block'; puff.style.opacity=1; puff.style.transform='scale(3)'; setTimeout(()=>{ puff.style.opacity=0; puff.style.transform='scale(0)'; puff.style.display='none'; }, 900); }
+          van.classList.add('champion'); if(flag) flag.style.display='block';
+        }, MOVE_DURATION);
+      }else{
+        van.classList.remove('champion'); if(flag) flag.style.display='none';
+        van.style.left=newPos+'px'; van.style.transform='scaleX(-1)';
+      }
+    }
+
+    async function startRaceAutomation(){
+      startButton.innerText='RACE IN PROGRESS...';
+
+      TECH_NAMES.forEach(n=>{
+        CUMULATIVE_SALES_TOTAL[n]=0; IS_FINISHED[n]=false;
+        const c=document.getElementById(idFor('counter',n)); if(c) c.innerText=formatCurrency(0);
+        const v=document.getElementById(idFor('van',n)); if(v){ v.style.left='0px'; v.style.transform='scaleX(-1)'; v.style.opacity='1'; v.classList.remove('champion'); const f=v.querySelector('.flag'); if(f) f.style.display='none'; }
+      });
+
+      ensureVroomPlaying();
+      let continuousLoopStarted=false;
+
+      for(let m=0;m<MONTHS.length;m++){
+        const sample=TECH_NAMES[0]; if(!sample || MONTHLY_SALES_DATA[sample]?.[m]===undefined) break;
+
+        restartVroom();
+        monthIndicatorElement.innerText=MONTHS[m].toUpperCase();
+        monthIndicatorElement.classList.add('active-month');
+
+        const order=techOrderForMonth(m, TECH_NAMES);
+        for(const name of order){
+          const monthly=MONTHLY_SALES_DATA[name]?.[m]||0;
+          const prev=CUMULATIVE_SALES_TOTAL[name]||0;
+          const next=prev+monthly;
+
+          if(!continuousLoopStarted && (monthly>0 || next>prev || IS_FINISHED[name]===true)){ startVroom2(); continuousLoopStarted=true; }
+
+          if(monthly>0 || next>prev || IS_FINISHED[name]){
+            raceVan(name, prev, next);
+            await delay(PAUSE_BETWEEN_TECHS);
+          } else {
+            CUMULATIVE_SALES_TOTAL[name]=next;
+            animateCounter(name, prev, next, 1);
+          }
+        }
+
+        await delay(MOVE_DURATION);
+        monthIndicatorElement.classList.remove('active-month');
+        await delay(PAUSE_BETWEEN_MONTHS);
+      }
+
+      stopVroom(); stopVroom2();
+
+      startButton.disabled=false;
+      startButton.classList.add('solid-green');
+      startButton.style.transition='none';
+      startButton.style.backgroundColor='';
+      startButton.innerText='';
+    }
+
+    async function countdown(){
+      try{ if(screen.orientation?.lock) screen.orientation.lock('landscape'); }catch(e){}
+      startButton.disabled=true; startButton.innerText=''; startButton.classList.remove('solid-green'); startButton.style.backgroundColor='#dc3545';
+      safePlay(readyGoSound);
+      startButton.style.transition='background-color 3s linear'; startButton.style.backgroundColor='#ffc107'; monthIndicatorElement.innerText='STARTING...';
+      await delay(3000);
+      startButton.style.transition='background-color .1s'; startButton.classList.add('solid-green'); startButton.innerText='GO!';
+      safePlay(startSound);
+      startRaceAutomation();
+    }
+
+    /* ---------- Routing & init ---------- */
+    function showAdmin(){
+      document.getElementById('admin-data-entry').style.display='block';
+      document.querySelector('.race-view-container').style.display='none';
+      document.querySelector('.race-track-container').style.display='none';
+    }
+    async function showRace(){
+      document.getElementById('admin-data-entry').style.display='none';
+      document.querySelector('.race-view-container').style.display='block';
+      document.querySelector('.race-track-container').style.display='block';
+
+      // always pull latest from cloud, then build
+      await fetchCloudData();
+
+      buildTrack();
+
+      TECH_NAMES.forEach(n=>{
+        const c=document.getElementById(idFor('counter',n)); if(c) c.innerText=formatCurrency(0);
+        const v=document.getElementById(idFor('van',n)); if(v){ v.style.left='0px'; v.style.transform='scaleX(-1)'; }
+      });
+
+      monthIndicatorElement.innerText='Ready to Race!';
+      startButton.onclick = countdown;
+    }
+
+    function initialize(){
+      // local fallbacks
+      loadTechList();
+      loadSavedData();
+      populateDataTable();
+
+      // wire admin bar
+      document.getElementById('add-tech-btn').onclick = ()=>addTechnician(document.getElementById('new-tech-name').value);
+      document.getElementById('new-tech-name').addEventListener('keydown',(e)=>{ if(e.key==='Enter') addTechnician(e.currentTarget.value); });
+      document.getElementById('save-btn').onclick = ()=>saveData(true);
+      document.getElementById('race-btn').onclick = ()=>{ saveData(false); window.location.pathname='/race'; };
+      document.getElementById('token-btn').onclick = ()=>{
+        const t = prompt('Enter ADMIN_TOKEN (from Netlify env). You only need to do this once on the admin device:');
+        if(t){ localStorage.setItem('ADMIN_TOKEN', t); alert('Token saved locally.'); }
+      };
+
+      // simple path-based routing
+      const path = window.location.pathname.replace(/\/+$/,'');
+      if(path.endsWith('/admin')) showAdmin();
+      else showRace(); // default for everyone else
+
+      // also support query ?view=race for legacy links
+      const params=new URLSearchParams(window.location.search);
+      if(params.get('view')==='race') showRace();
+    }
+
+    document.addEventListener('DOMContentLoaded', initialize);
+  </script>
+</body>
+</html>
